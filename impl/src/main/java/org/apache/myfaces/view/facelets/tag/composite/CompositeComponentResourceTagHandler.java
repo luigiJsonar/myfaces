@@ -51,6 +51,7 @@ import javax.faces.view.facelets.FaceletException;
 import javax.faces.view.facelets.FaceletHandler;
 import javax.faces.view.facelets.MetaRuleset;
 import javax.faces.view.facelets.Metadata;
+import javax.faces.view.facelets.TagAttribute;
 import javax.faces.view.facelets.TagException;
 import javax.faces.view.facelets.TextHandler;
 
@@ -62,9 +63,11 @@ import org.apache.myfaces.view.facelets.el.VariableMapperWrapper;
 import org.apache.myfaces.view.facelets.tag.ComponentContainerHandler;
 import org.apache.myfaces.view.facelets.tag.TagHandlerUtils;
 import org.apache.myfaces.view.facelets.tag.jsf.ActionSourceRule;
+import org.apache.myfaces.view.facelets.tag.jsf.ClearBindingValueExpressionListener;
 import org.apache.myfaces.view.facelets.tag.jsf.ComponentBuilderHandler;
 import org.apache.myfaces.view.facelets.tag.jsf.ComponentSupport;
 import org.apache.myfaces.view.facelets.tag.jsf.EditableValueHolderRule;
+import org.apache.myfaces.view.facelets.tag.jsf.PreDisposeViewEvent;
 import org.apache.myfaces.view.facelets.tag.jsf.ValueHolderRule;
 import org.apache.myfaces.view.facelets.tag.jsf.core.AjaxHandler;
 
@@ -111,8 +114,26 @@ public class CompositeComponentResourceTagHandler extends ComponentHandler
     {
         FacesContext facesContext = ctx.getFacesContext();
         UIComponent component = facesContext.getApplication().createComponent(facesContext, _resource);
-        
-        // Check required attributes if the app is not on production stage. 
+
+        TagAttribute bindingAttribute = getBinding();
+        if (bindingAttribute != null)
+        {
+            ValueExpression bindingValueExpresison = bindingAttribute.getValueExpression(ctx, Object.class);
+
+            bindingValueExpresison.setValue(ctx, component);
+
+            component.setValueExpression("binding", bindingValueExpresison);
+
+            if (!bindingValueExpresison.isReadOnly(facesContext.getELContext()))
+            {
+                ComponentSupport.getViewRoot(ctx, component)
+                        .getAttributes().put("oam.CALL_PRE_DISPOSE_VIEW", Boolean.TRUE);
+                component.subscribeToEvent(PreDisposeViewEvent.class,
+                        new ClearBindingValueExpressionListener());
+            }
+        }
+
+        // Check required attributes if the app is not on production stage.
         // Unfortunately, we can't check it on constructor because we need to call
         // ViewDeclarationLanguage.getComponentMetadata() and on that point it is possible to not
         // have a viewId.
